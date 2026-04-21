@@ -25,14 +25,3 @@ A concurrent, client-server university registration system featuring a **Fyne GU
 ## 🏗 System Architecture
 The system uses an Object-Oriented approach in Go, where the `Course` struct encapsulates registration logic, ensuring that capacity limits are strictly enforced across all concurrent threads.
 ```
-
----
-
-### 5. Final Touch: Add a Screenshot
-GitHub allows you to show off your work. 
-1. Run your program and take a screenshot of the **GUI window** and the **Server terminal** side-by-side.
-2. Upload the image to your repository.
-3. You can display it in your README by adding this line:
-   `![Project Screenshot](screenshot.png)`
-
-Now your project is live! Do you need help setting up a `.gitignore` file to keep your folder clean of compiled binaries?
