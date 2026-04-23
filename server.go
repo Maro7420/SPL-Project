@@ -8,7 +8,7 @@ import (
 	"sync"
 )
 
-// --- Object-Oriented Data Models ---
+// Course struct encapsulates the data for a specific class
 type Course struct {
 	Code     string `json:"code"`
 	Name     string `json:"name"`
@@ -16,7 +16,7 @@ type Course struct {
 	Enrolled int    `json:"enrolled"`
 }
 
-// Encapsulation: Method to handle business logic safely
+// RegisterStudent is a receiver method that safely handles the enrollment logic
 func (c *Course) RegisterStudent() bool {
 	if c.Enrolled < c.Capacity {
 		c.Enrolled++
@@ -25,53 +25,67 @@ func (c *Course) RegisterStudent() bool {
 	return false
 }
 
+// RegistrationSystem acts as the centralized, thread-safe database
 type RegistrationSystem struct {
-	mu      sync.Mutex // Ensures Thread Safety
+	mu      sync.Mutex // Ensures thread safety across concurrent requests
 	Courses map[string]*Course
 }
 
+// NewRegistrationSystem initializes the backend with sample courses
 func NewRegistrationSystem() *RegistrationSystem {
 	return &RegistrationSystem{
 		Courses: map[string]*Course{
-			"CSC230": {Code: "CSC230", Name: "Computer Architecture & Assembly", Capacity: 30, Enrolled: 15},
-			"NET200": {Code: "NET200", Name: "Network Engineering & Security", Capacity: 25, Enrolled: 10},
+			"CSC230": {Code: "CSC230", Name: "Computer Architecture", Capacity: 30, Enrolled: 15},
+			"NET200": {Code: "NET200", Name: "Network Engineering", Capacity: 25, Enrolled: 10},
 			"MAT201": {Code: "MAT201", Name: "Advanced Calculus", Capacity: 40, Enrolled: 20},
 		},
 	}
 }
 
-// --- Networking Layer ---
+// handleRequest processes individual client connections concurrently
 func handleRequest(conn net.Conn, sys *RegistrationSystem) {
 	defer conn.Close()
 	scanner := bufio.NewScanner(conn)
+
+	// Log when a new connection is established
+	fmt.Printf("\n[+] New Connection established from: %s\n", conn.RemoteAddr().String())
 
 	for scanner.Scan() {
 		var req map[string]string
 		json.Unmarshal([]byte(scanner.Text()), &req)
 
-		sys.mu.Lock() // Locking to prevent race conditions during registration
+		sys.mu.Lock() // Lock the database to prevent race conditions
 		var response []byte
-		
-		if req["action"] == "get_courses" {
-			list := []Course{}
-			for _, c := range sys.Courses {
-				list = append(list, *c)
-			}
-			response, _ = json.Marshal(list)
-			
-		} else if req["action"] == "register" {
-			course, exists := sys.Courses[req["course_code"]]
+
+		if req["action"] == "register" {
+			// Extract data sent from the client GUI
+			courseCode := req["course_code"]
+			studentName := req["student_name"]
+			studentID := req["student_id"]
+
+			// Log the incoming request to the terminal for visibility
+			fmt.Printf("[>>>] RECEIVED REQUEST: Student '%s' (ID: %s) wants to join '%s'\n", studentName, studentID, courseCode)
+
+			course, exists := sys.Courses[courseCode]
 			msg := "Error: Course not found"
-			
+
 			if exists && course.RegisterStudent() {
-				msg = "Successfully registered for " + course.Code
+				// Format the success message containing the student's details
+				msg = fmt.Sprintf("✅ Server Confirmed: Student [%s] (ID: %s) is now registered for %s", studentName, studentID, course.Code)
+
+				// Log the successful registration
+				fmt.Printf("[<<<] SUCCESS: Registered '%s'. Seats left: %d\n", studentName, course.Capacity-course.Enrolled)
 			} else if exists {
-				msg = "Registration failed: Course is full"
+				msg = "❌ Registration failed: Course is full"
+
+				// Log the failure if the course is full
+				fmt.Printf("[<<<] FAILED: Course '%s' is full.\n", courseCode)
 			}
+
 			response, _ = json.Marshal(map[string]string{"message": msg})
 		}
-		
-		sys.mu.Unlock()
+
+		sys.mu.Unlock() // Unlock the database for the next user
 		fmt.Fprintln(conn, string(response))
 	}
 }
@@ -84,15 +98,20 @@ func main() {
 		return
 	}
 	defer listener.Close()
-	
+
+	// Display startup interface in the terminal
+	fmt.Println("========================================")
 	fmt.Println("[LISTENING] Server is running on port 65432...")
-	
+	fmt.Println("Waiting for student requests...")
+	fmt.Println("========================================")
+
+	// Infinite loop to accept multiple incoming connections
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
 			continue
 		}
-		// Concurrency: Goroutine allows multiple students to connect at once
-		go handleRequest(conn, sys) 
+		// Create a new Goroutine for each connected student
+		go handleRequest(conn, sys)
 	}
 }
